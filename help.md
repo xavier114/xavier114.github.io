@@ -14,7 +14,7 @@ Unixel on web use github with branch to store every user individual data!
 
 First you need to close any application that is running except your browser.
 
-Open a new tab, and go to <code>https://xavier114.github.io</code>
+Open a new tab, and go to <code>https://xavier114.github.io/index.html</code>
 
 Enjoy!
 

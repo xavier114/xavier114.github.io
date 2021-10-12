@@ -1,7 +1,6 @@
 # Help Catalog
 
 If you run into trouble using Unixel (Web Edition) you are at the right place!
-Unixel on web use github with branch to store every user individual data!
 
 ### Index Table
 

@@ -8,9 +8,9 @@ individual data.
 
 This Web Operating System may asked these permission :
 
-Access Pheripherals
-Access Downloads
-Access Log
+- Access Pheripherals
+- Access Downloads
+- Access Log
 
 # Changelog
 

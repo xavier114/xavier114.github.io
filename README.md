@@ -14,6 +14,11 @@ This Web Operating System may asked these permission :
 
 # Changelog
 
+## v0.99.75 Minor Update
+- Added Network GPU
+- Support AMX Xoom CPU
+- Support CPU Buffering Tex4
+
 ## v0.99.74 Major Update
 - Added Gnux Web API
 - Support Networks Users (kinda need for the web edition)

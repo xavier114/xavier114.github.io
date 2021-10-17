@@ -45017,7 +45017,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 
 	    createList: function (file) {
 
-	        var extMaxHandle = 14;
+	        var extMaxHandle = 10;
 	        if (extMaxHandle) {
 	            this.extensions = new Array(extMaxHandle);
 	            this.numOfConditions = new Array(extMaxHandle);
@@ -45030,7 +45030,10 @@ window['Runtime'] = (function Runtime(__can, __path){
 	            var e;
 	            // START_ADDEXT
 	            e = new CExtLoad();
-	            e.handle = 3;
+	            e.handle = 0;
+	            this.addExt(e);
+	            e = new CExtLoad();
+	            e.handle = 1;
 	            this.addExt(e);
 	            e = new CExtLoad();
 	            e.handle = 4;
@@ -45093,8 +45096,10 @@ window['Runtime'] = (function Runtime(__can, __path){
 		{
 	        switch (this.handle) {
 	            // START_NEWEXT
-	        case 3:
-	        return new CRunkcini();
+	        case 0:
+	        return new CRunLocation();
+	        case 1:
+	        return new CRunAccelerometer();
 	        case 4:
 	        return new CRunkcedit();
 	        case 5:
@@ -49951,7 +49956,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 
 	//----------------------------------------------------------------------------------
 	//
-	// CRUNKCINI : objet INI
+	// CRUNLOCATION : GPS
 	//
 	//----------------------------------------------------------------------------------
 	/* Copyright (c) 1996-2012 Clickteam
@@ -49972,298 +49977,328 @@ window['Runtime'] = (function Runtime(__can, __path){
 	 * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 	 * IN THE SOFTWARE.
 	 */
-	CRunkcini.INI_FULLPATH = 0x0002;
-	CRunkcini.INI_FULLPATHINI_APPFOLDER = 0x0004;
-	CRunkcini.INI_FULLPATHINI_UTF8 = 0x0008;
-	function CRunkcini()
+
+	CRunLocation.CND_LOCENABLED = 0;
+	CRunLocation.CND_NEWLOCATION = 1;
+	CRunLocation.CND_LAST = 2;
+	CRunLocation.ACT_GETLOCATION = 0;
+	CRunLocation.ACT_SETDISTANCEFILTER = 1;
+	CRunLocation.ACT_SETACCURACY = 2;
+	CRunLocation.EXP_LATITUDE = 0;
+	CRunLocation.EXP_LONGITUDE = 1;
+	CRunLocation.EXP_ALTITUDE = 2;
+	CRunLocation.EXP_COURSE = 3;
+	CRunLocation.EXP_SPEED = 4;
+	CRunLocation.EXP_TIMELAST = 5;
+	CRunLocation.EXP_DISTANCEFILTER = 6;
+	CRunLocation.EXP_ACCURACY = 7;
+
+	function CRunLocation()
 	{
-		this.ini = null;
-		this.iniFlags = 0;
-		this.iniName = null;
-		this.iniCurrentGroup = null;
-		this.iniCurrentItem = null;
-		this.changeCounter = 0;
+		this.newLocationCount = 0;
+		this.distance = 0;
+		this.accuracy = 0;
+		this.altitude = 0;
+		this.latitude = 0;
+		this.longitude = 0;
+		this.course = 0;
+		this.speed = 0;
+		this.bEnabled = false;
+		this.error = false;
+		this.firsttimeEvent = false;
 	}
 
-	CRunkcini.prototype = CServices.extend(new CRunExtension(),
+	CRunLocation.prototype = CServices.extend(new CRunExtension(),
 		{
 			getNumberOfConditions: function ()
 			{
-				return 0;
+				return 2;
 			},
-			createRunObject:       function (file, cob, version)
+
+			createRunObject: function (file, cob, version)
 			{
-				this.iniFlags = file.readAShort();
-				this.iniName = CServices.parseName(file.readAString());
-				if (this.iniName.length == 0)
+				this.distance = file.readAInt();
+				this.bEnabled = false;
+				if (navigator.geolocation)
+					this.bEnabled = true;
+				this.accuracy = file.readAInt();
+				this.firsttimeEvent = true;
+				return true;
+			},
+
+			handleRunObject: function ()
+			{
+			    if (this.firsttimeEvent)
+			    {
+			        this.firsttimeEvent = false;
+			        this.getPosition();
+			    }
+			    return 0;
+			},
+
+			action: function (num, act)
+			{
+				switch (num)
 				{
-					this.iniName = "Ini.ini";
+				    case CRunLocation.ACT_GETLOCATION:
+						this.getPosition();
+						break;
+					case CRunLocation.ACT_SETDISTANCEFILTER:
+						break;
+					case CRunLocation.ACT_SETACCURACY:
+						this.setAccuracy();
+						break;
 				}
-				var flags = 0;
-				if (this.iniFlags & CRunkcini.INI_FULLPATHINI_UTF8)
-					flags |= CIni.INIFLAG_UTF8;
-				this.ini = new CIni(this.rh.rhApp, flags);
-				this.iniCurrentGroup = "Group";
-				this.iniCurrentItem = "Item";
-				this.changeCounter = 0;
+			},
+
+			getOptions: function ()
+			{
+				return {enableHighAccuracy: (this.accuracy == 0), timeout: 100000, maximumAge: 600000};
+			},
+
+			setAccuracy: function (act)
+			{
+				this.accuracy = act.getParamExpression(this.rh, 0);
+			},
+
+			getPosition: function ()
+			{
+				if (this.bEnabled)
+				{
+					this.error = false;
+					var options = this.getOptions();
+					var that = this;
+					navigator.geolocation.getCurrentPosition
+					(
+						function (position)
+						{
+						    that.longitude = 0;
+						    that.latitude = 0;
+						    that.altitude = 0;
+							that.speed = 0;
+							if (position.coords.longitude != null)
+							    that.longitude = position.coords.longitude;
+							if (position.coords.latitude != null)
+							    that.latitude = position.coords.latitude;
+							if (position.coords.altitude != null)
+							    that.altitude = position.coords.altitude;
+							if (position.coords.speed != null)
+							    that.speed = position.coords.speed;
+							that.newLocationCount = that.ho.getEventCount();
+						    that.ho.pushEvent(CRunLocation.CND_NEWLOCATION, 0);
+						},
+						function (error)
+						{
+							switch (error.code)
+							{
+								case error.PERMISSION_DENIED:
+								case error.POSITION_UNAVAILABLE:
+								case error.TIMEOUT:
+								case error.UNKNOWN_ERROR:
+									that.error = true;
+									break;
+							}
+						},
+						options
+					);
+				}
+			},
+
+			cndNewLocation: function ()
+			{
+				if ((this.ho.hoFlags & CObject.HOF_TRUEEVENT) != 0)
+				{
+					return true;
+				}
+				if (this.ho.getEventCount() == this.newLocationCount)
+				{
+					return true;
+				}
 				return false;
 			},
-			handleRunObject:       function ()
-			{
-				if (this.changeCounter > 0)
-				{
-					this.changeCounter--;
-					if (this.changeCounter == 0)
-					{
-						this.ini.saveIni();
-					}
-				}
-				return 0;
-			},
-			destroyRunObject:      function (bFast)
-			{
-				this.ini.saveIni();
-			},
 
-			// Actions
-			// -------------------------------------------------
-			action:                function (num, act)
+			condition: function (num, cnd)
 			{
 				switch (num)
 				{
-					case 0:
-						this.SetCurrentGroup(act);
-						break;
-					case 1:
-						this.SetCurrentItem(act);
-						break;
-					case 2:
-						this.SetValue(act);
-						break;
-					case 3:
-						this.SavePosition(act);
-						break;
-					case 4:
-						this.LoadPosition(act);
-						break;
-					case 5:
-						this.SetString(act);
-						break;
-					case 6:
-						this.SetCurrentFile(act);
-						break;
-					case 7:
-						this.SetValueItem(act);
-						break;
-					case 8:
-						this.SetValueGroupItem(act);
-						break;
-					case 9:
-						this.SetStringItem(act);
-						break;
-					case 10:
-						this.SetStringGroupItem(act);
-						break;
-					case 11:
-						this.DeleteItem(act);
-						break;
-					case 12:
-						this.DeleteGroupItem(act);
-						break;
-					case 13:
-						this.DeleteGroup(act);
+					case CRunLocation.CND_NEWLOCATION:
+						return this.cndNewLocation();
+					case CRunLocation.CND_LOCENABLED:
+						if (this.bEnabled)
+						{
+							return !this.error;
+						}
 						break;
 				}
+				return false;
 			},
 
-			SetCurrentGroup: function (act)
-			{
-				this.iniCurrentGroup = act.getParamExpString(this.rh, 0);
-			},
-
-			SetCurrentItem: function (act)
-			{
-				this.iniCurrentItem = act.getParamExpString(this.rh, 0);
-			},
-
-			SetValue: function (act)
-			{
-				var value = act.getParamExpression(this.rh, 0);
-				var s = value.toString();
-				this.ini.writePrivateProfileString(this.iniCurrentGroup, this.iniCurrentItem, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			SavePosition: function (act)
-			{
-				var hoPtr = act.getParamObject(this.rh, 0);
-				var s = hoPtr.hoX.toString() + "," + hoPtr.hoY.toString();
-				var item = "pos." + hoPtr.hoOiList.oilName;
-				this.ini.writePrivateProfileString(this.iniCurrentGroup, item, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			LoadPosition: function (act)
-			{
-				var hoPtr = act.getParamObject(this.rh, 0);
-				var item = "pos." + hoPtr.hoOiList.oilName;
-				var s = this.ini.getPrivateProfileString(this.iniCurrentGroup, item, "X", this.iniName);
-				if (s != "X")
-				{
-					var virgule = s.indexOf(",");
-					var left = s.substring(0, virgule);
-					var right = s.substring(virgule + 1);
-					hoPtr.hoX = parseInt(left, 10);
-					if (isNaN(hoPtr.hoX))
-						hoPtr.hoX = 0;
-					hoPtr.hoY = parseInt(right, 10);
-					if (isNaN(hoPtr.hoY))
-						hoPtr.hoY = 0;
-					hoPtr.roc.rcChanged = true;
-					hoPtr.roc.rcCheckCollides = true;
-				}
-			},
-
-			SetString: function (act)
-			{
-				var s = act.getParamExpString(this.rh, 0);
-				this.ini.writePrivateProfileString(this.iniCurrentGroup, this.iniCurrentItem, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			SetCurrentFile: function (act)
-			{
-				this.iniName = CServices.parseName(act.getParamExpString(this.rh, 0));
-			},
-
-			SetValueItem: function (act)
-			{
-				var item = act.getParamExpString(this.rh, 0);
-				var value = act.getParamExpression(this.rh, 1);
-				var s = value.toString();
-				this.ini.writePrivateProfileString(this.iniCurrentGroup, item, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			SetValueGroupItem: function (act)
-			{
-				var group = act.getParamExpString(this.rh, 0);
-				var item = act.getParamExpString(this.rh, 1);
-				var value = act.getParamExpression(this.rh, 2);
-				var s = value.toString();
-				this.ini.writePrivateProfileString(group, item, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			SetStringItem: function (act)
-			{
-				var item = act.getParamExpString(this.rh, 0);
-				var s = act.getParamExpString(this.rh, 1);
-				this.ini.writePrivateProfileString(this.iniCurrentGroup, item, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			SetStringGroupItem: function (act)
-			{
-				var group = act.getParamExpString(this.rh, 0);
-				var item = act.getParamExpString(this.rh, 1);
-				var s = act.getParamExpString(this.rh, 2);
-				this.ini.writePrivateProfileString(group, item, s, this.iniName);
-				this.changeCounter = 10;
-			},
-
-			DeleteItem: function (act)
-			{
-				this.ini.deleteItem(this.iniCurrentGroup, act.getParamExpString(this.rh, 0), this.iniName);
-				this.changeCounter = 10;
-			},
-
-			DeleteGroupItem: function (act)
-			{
-				this.ini.deleteItem(act.getParamExpString(this.rh, 0), act.getParamExpString(this.rh, 1), this.iniName);
-				this.changeCounter = 10;
-			},
-
-			DeleteGroup: function (act)
-			{
-				this.ini.deleteGroup(act.getParamExpString(this.rh, 0), this.iniName);
-				this.changeCounter = 10;
-			},
-
-			// Expressions
-			// --------------------------------------------
-			expression:  function (num)
+			expression: function (num)
 			{
 				switch (num)
 				{
-					case 0:
-						return this.GetValue();
-					case 1:
-						return this.GetString();
-					case 2:
-						return this.GetValueItem();
-					case 3:
-						return this.GetValueGroupItem();
-					case 4:
-						return this.GetStringItem();
-					case 5:
-						return this.GetStringGroupItem();
+					case CRunLocation.EXP_LATITUDE:
+						return this.latitude;
+					case CRunLocation.EXP_LONGITUDE:
+						return this.longitude;
+					case CRunLocation.EXP_ALTITUDE:
+						return this.altitude;
+					case CRunLocation.EXP_COURSE:
+						return 0;
+					case CRunLocation.EXP_SPEED:
+						return this.speed;
+					case CRunLocation.EXP_TIMELAST:
+						return 0;
+					case CRunLocation.EXP_DISTANCEFILTER:
+						return 0;
+					case CRunLocation.EXP_ACCURACY:
+						return this.accuracy;
 				}
 				return null;
-			},
-
-			GetValue: function ()
-			{
-				var s = this.ini.getPrivateProfileString(this.iniCurrentGroup, this.iniCurrentItem, "", this.iniName);
-				var value = 0;
-				value = parseInt(s, 10);
-				if (isNaN(value))
-					value = 0;
-				return (value);
-			},
-
-			GetString: function ()
-			{
-				return this.ini.getPrivateProfileString(this.iniCurrentGroup, this.iniCurrentItem, "", this.iniName);
-			},
-
-			GetValueItem: function ()
-			{
-				var item = this.ho.getExpParam();
-				var s = this.ini.getPrivateProfileString(this.iniCurrentGroup, item, "", this.iniName);
-				var value = parseInt(s, 10);
-				if (isNaN(value))
-					value = 0;
-				return (value);
-			},
-
-			GetValueGroupItem: function ()
-			{
-				var group = this.ho.getExpParam();
-				var item = this.ho.getExpParam();
-				var s = this.ini.getPrivateProfileString(group, item, "", this.iniName);
-				var value = parseInt(s, 10);
-				;
-				if (isNaN(value))
-					value = 0;
-				return (value);
-			},
-
-			GetStringItem: function ()
-			{
-				var item = this.ho.getExpParam();
-				return this.ini.getPrivateProfileString(this.iniCurrentGroup, item, "", this.iniName);
-			},
-
-			GetStringGroupItem: function ()
-			{
-				var group = this.ho.getExpParam();
-				var item = this.ho.getExpParam();
-				return this.ini.getPrivateProfileString(group, item, "", this.iniName);
 			}
+
 		});
 
 
+	//----------------------------------------------------------------------------------
+	//
+	// CRUNACCELEROMETER iPhone accelerometers
+	//
+	//----------------------------------------------------------------------------------
+	/* Copyright (c) 1996-2012 Clickteam
+	 *
+	 * This source code is part of the HTML5 exporter for Clickteam Multimedia Fusion 2.
+	 *
+	 * Permission is hereby granted to any person obtaining a legal copy
+	 * of Clickteam Multimedia Fusion 2 to use or modify this source code for
+	 * debugging, optimizing, or customizing applications created with
+	 * Clickteam Multimedia Fusion 2.
+	 * Any other use of this source code is prohibited.
+	 *
+	 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+	 * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+	 * IN THE SOFTWARE.
+	 */
+	CRunAccelerometer.EXP_XDIRECT = 0;
+	CRunAccelerometer.EXP_YDIRECT = 1;
+	CRunAccelerometer.EXP_ZDIRECT = 2;
+	CRunAccelerometer.EXP_XGRAVITY = 3;
+	CRunAccelerometer.EXP_YGRAVITY = 4;
+	CRunAccelerometer.EXP_ZGRAVITY = 5;
+	CRunAccelerometer.EXP_XINSTANT = 6;
+	CRunAccelerometer.EXP_YINSTANT = 7;
+	CRunAccelerometer.EXP_ZINSTANT = 8;
+	CRunAccelerometer.EXP_ORIENTATION = 9;
+	CRunAccelerometer.CND_ORIENTATIONCHANGED = 0;
+	CRunAccelerometer.CND_LAST = 1;
+
+
+	function CRunAccelerometer()
+	{
+		this.orientationCount = 0;
+		this.accX = 0;
+		this.accY = 0;
+		this.accZ = 0;
+		this.accGravX = 0;
+		this.accGravY = 0;
+		this.accGravZ = 0;
+	}
+
+	CRunAccelerometer.prototype = CServices.extend(new CRunExtension(),
+		{
+			getNumberOfConditions: function ()
+			{
+				return CRunAccelerometer.CND_LAST;
+			},
+			createRunObject:       function (file, cob, version)
+			{
+				this.orientationCount = -1;
+				this.orientation = 0;
+				this.rh.rhApp.startAccelerometer();
+				return true;
+			},
+
+			destroyRunObject: function (bFast)
+			{
+				this.rh.rhApp.endAccelerometer();
+				;
+			},
+
+			handleRunObject: function ()
+			{
+				return 0;
+			},
+
+			condition: function (num, cnd)
+			{
+				if (num == CRunAccelerometer.CND_ORIENTATIONCHANGED)
+				{
+					return this.orientationChanged();
+				}
+				return false;
+			},
+
+			orientationChanged: function ()
+			{
+				if ((ho.hoFlags & CObject.HOF_TRUEEVENT) != 0)
+				{
+					return true;
+				}
+				if (ho.getEventCount() == this.orientationCount)
+				{
+					return true;
+				}
+				return false;
+			},
+
+			expression: function (num)
+			{
+				var ret = 0;
+
+				switch (num)
+				{
+					case CRunAccelerometer.EXP_XDIRECT:
+						ret = this.rh.rhApp.accX;
+						break;
+					case CRunAccelerometer.EXP_YDIRECT:
+						ret = this.rh.rhApp.accY;
+						break;
+					case CRunAccelerometer.EXP_ZDIRECT:
+						ret = this.rh.rhApp.accZ;
+						break;
+					case CRunAccelerometer.EXP_XGRAVITY:
+						ret = this.rh.rhApp.accGravX;
+						break;
+					case CRunAccelerometer.EXP_YGRAVITY:
+						ret = this.rh.rhApp.accGravY;
+						break;
+					case CRunAccelerometer.EXP_ZGRAVITY:
+						ret = this.rh.rhApp.accGravZ;
+						break;
+					case CRunAccelerometer.EXP_XINSTANT:
+						ret = this.rh.rhApp.accX;
+						break;
+					case CRunAccelerometer.EXP_YINSTANT:
+						ret = this.rh.rhApp.accY;
+						break;
+					case CRunAccelerometer.EXP_ZINSTANT:
+						ret = this.rh.rhApp.accZ;
+						break;
+					case CRunAccelerometer.EXP_ORIENTATION:
+						return 0;
+
+				}
+				return ret;
+			}
+		});
+	    
+
+	    
+	    
 	/* Edit object (James) */
 	/* Copyright (c) 1996-2012 Clickteam
 	 *

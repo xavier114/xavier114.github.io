@@ -14,6 +14,11 @@ This Web Operating System may asked these permission :
 
 # Changelog
 
+## v0.99.78 Major Update
+- Added Setup
+- Support multiples languages
+- Support customizable features
+
 ## v0.99.75 Minor Update
 - Added Network GPU
 - Support AMX Xoom CPU

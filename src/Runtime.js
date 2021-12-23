@@ -15918,7 +15918,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 	 * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 	 * IN THE SOFTWARE.
 	 */
-	__scope["FusionVersion"] = "Clickteam Fusion HTML5 Exporter Build 285.1";
+	__scope["FusionVersion"] = "Clickteam Fusion HTML5 Exporter Build 291.2";
 
 	CRunApp.MAX_PLAYER = 4;
 	CRunApp.RUNTIME_VERSION = 0x0302;
@@ -15997,6 +15997,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 	CRunApp.MAX_TOUCHES = 10;
 	CRunApp.FAKE_TOUCHIDENTIFIER = 0x2356A465;
 	CRunApp.TOUCHID_EMPTY = 0x69865358;
+	CRunApp.MOUSE_DOUBLE_CLICK_DELAY = 300;
 
 	function loadApplication()
 	{
@@ -16012,6 +16013,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 	function CRunApp(cName, cfile, path, sub)
 	{
 		this.isSubApp = (sub === true);
+		this.isPreloaderSubApp = false;
 		if(this.isSubApp)
 		{
 			this.canvas = cName.canvas;
@@ -16117,6 +16119,8 @@ window['Runtime'] = (function Runtime(__can, __path){
 		this.bUnicode = false;
 		this.xMouseOffset = 0;
 		this.yMouseOffset = 0;
+		this.mouseDoubleClickCode = null;
+		this.mouseDoubleClickTimestamp = null;
 		this.deltaWheel = 0;
 		this.effect = 0;
 		this.effectParam = 0;
@@ -16170,6 +16174,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 		this.joystickOn = 0;
 
 		this.accelerometer = 0;
+		this.accelerometerHandler = null;
 		this.accX = 0;
 		this.accY = 0;
 		this.accZ = 0;
@@ -16215,6 +16220,8 @@ window['Runtime'] = (function Runtime(__can, __path){
 		this.codePage = -1;
 
 
+
+		this.modalSubappObject = null;
 	}
 	CRunApp.prototype =
 	{
@@ -16583,36 +16590,111 @@ window['Runtime'] = (function Runtime(__can, __path){
 					that.fullScreen = document.webkitIsFullScreen;
 					that.resizeCanvas();
 				}, false);
-				this.canvas.addEventListener("mousemove", function (e)
-				{
-					that.mouseMove(e, that.canvas);
-					if (e.preventDefault) e.preventDefault();
-				}, false);
-				this.canvas.addEventListener("mousedown", function (e)
-				{
-					that.mouseDown(e);
-					if (e.preventDefault) e.preventDefault();
-				}, false);
-				this.canvas.addEventListener("mouseup", function (e)
-				{
-					that.mouseUp(e);
-					if (e.preventDefault) e.preventDefault();
-				}, false);
-				this.canvas.addEventListener("mouseout", function (e)
-				{
-					that.mouseOut(e);
-					if (e.preventDefault) e.preventDefault();
-				}, false);
-				this.canvas.addEventListener("click", function (e)
-				{
-					//that.click(e);
-					if (e.preventDefault) e.preventDefault();
-				}, false);
-				this.canvas.addEventListener("dblclick", function (e)
-				{
-					//that.dblClick(e);
-					if (e.preventDefault) e.preventDefault();
-				}, false);
+
+	            // Does the browser support pointer events?
+				if (window.PointerEvent) {
+				    // Disable Edge default touch handling if Multiple Touch object is included
+				    if (typeof (CRunMultipleTouch) === "undefined") {
+				        //console.log("Multiple Touch not included => keep touch interception by browser");
+				    } else {
+				        //console.log("Multiple Touch included => disable touch interception by browser");
+				        this.canvas.setAttribute("style", "-ms-touch-action: none;");
+				        this.canvas.setAttribute("style", "touch-action: none;");
+				    }
+
+				    this.canvas.addEventListener('pointerdown', function (event) {
+				        //where should re direct these events
+				        switch (event.pointerType) {
+				            case 'mouse':
+				            case 'pen':
+				                that.mouseDown(event, true);
+				                break;
+				            case 'touch':
+				                that.touchStart(event, true);
+				                break;
+				        }
+
+				        //prevent default firing
+				        if (event.preventDefault) {
+				            event.preventDefault();
+				        }
+				    }, false);
+
+				    this.canvas.addEventListener('pointermove', function (event) {
+				        //where should re direct these events
+				        switch (event.pointerType) {
+				            case 'mouse':
+				            case 'pen':
+				                that.mouseMove(event, that.canvas);
+				                break;
+				            case 'touch':
+				                that.touchMove(event, true);
+				                break;
+				        }
+
+				        //prevent default firing
+				        if (event.preventDefault) {
+				            event.preventDefault();
+				        }
+				    }, false);
+
+				    this.canvas.addEventListener('pointerup', function (event) {
+				        //where should re direct these events
+				        switch (event.pointerType) {
+				            case 'mouse':
+				            case 'pen':
+				                that.mouseUp(event);
+				                break;
+				            case 'touch':
+				                that.touchEnd(event, true);
+				                break;
+				        }
+
+				        if (event.preventDefault) {
+				            event.preventDefault();
+				        }
+				    }, false);
+
+				    this.canvas.addEventListener('pointercancel', function (event) {
+				        //where should re direct these events
+				        switch (event.pointerType) {
+				            case 'touch':
+				                that.touchEnd(event, true);
+				                break;
+				        }
+
+				        if (event.preventDefault) {
+				            event.preventDefault();
+				        }
+				    }, false);
+				}
+				else {
+	                // The browser doesn't support pointer events
+				    this.canvas.addEventListener("mousemove", function (e) {
+				        that.mouseMove(e, that.canvas);
+				        if (e.preventDefault) e.preventDefault();
+				    }, false);
+				    this.canvas.addEventListener("mousedown", function (e) {
+				        that.mouseDown(e, false);
+				        if (e.preventDefault) e.preventDefault();
+				    }, false);
+				    this.canvas.addEventListener("mouseup", function (e) {
+				        that.mouseUp(e);
+				        if (e.preventDefault) e.preventDefault();
+				    }, false);
+				    this.canvas.addEventListener("mouseout", function (e) {
+				        that.mouseOut(e);
+				        if (e.preventDefault) e.preventDefault();
+				    }, false);
+				    this.canvas.addEventListener("click", function (e) {
+				        that.click(e);
+				        if (e.preventDefault) e.preventDefault();
+				    }, false);
+				    this.canvas.addEventListener("dblclick", function (e) {
+				        that.dblClick(e);
+				        if (e.preventDefault) e.preventDefault();
+				    }, false);
+				}
 				this.canvas.addEventListener("contextmenu", function (e)
 				{
 					if (e.preventDefault) e.preventDefault();
@@ -16656,26 +16738,26 @@ window['Runtime'] = (function Runtime(__can, __path){
 				}
 				this.nTouches = 0;
 
-				if (this.touchable)
+				if (this.touchable && !window.PointerEvent)
 				{
 					this.canvas.addEventListener('touchstart', function (e)
 					{
-						that.touchStart(e);
+						that.touchStart(e, false);
 						if (e.preventDefault) e.preventDefault();
 					}, false);
 					this.canvas.addEventListener('touchmove', function (e)
 					{
-						that.touchMove(e);
+					    that.touchMove(e, false);
 						if (e.preventDefault) e.preventDefault();
 					}, false);
 					this.canvas.addEventListener('touchend', function (e)
 					{
-						that.touchEnd(e);
+					    that.touchEnd(e, false);
 						if (e.preventDefault) e.preventDefault();
 					}, false);
 					this.canvas.addEventListener('touchcancel', function (e)
 					{
-						that.touchEnd(e);
+					    that.touchEnd(e, false);
 						if (e.preventDefault) e.preventDefault();
 					}, false);
 					/*
@@ -16799,6 +16881,11 @@ window['Runtime'] = (function Runtime(__can, __path){
 				{
 					return true;
 				}
+			}
+			if (('ontouchstart' in window) ||
+	             (navigator.maxTouchPoints > 0) ||
+	             (navigator.msMaxTouchPoints > 0)) {
+			    return true;
 			}
 			return false;
 		},
@@ -17005,7 +17092,8 @@ window['Runtime'] = (function Runtime(__can, __path){
 		{
 			if (!this.loading)
 			{
-				if (this.transitionDisplay == null)
+			    this.context.resetEffect((this.dwOptions & CRunApp.AH2OPT_RESAMPLESTRETCH) != 0);
+			    if (this.transitionDisplay == null)
 				{
 					if (!erase)
 						this.context.renderSolidColor(x, y, this.parentWidth, this.parentHeight, this.frameColor);
@@ -17835,41 +17923,38 @@ window['Runtime'] = (function Runtime(__can, __path){
 				this.subApps[n].mouseMove(e, obj);
 
 			if (!this.touchable && flag != 0x12345678)
-				this.touchMove(new CFakeTouch(e.pageX, e.pageY, this.canvas));
+			    this.touchMove(new CFakeTouch(e.pageX, e.pageY, this.canvas), false);
 		},
-		mouseUp:           function (e)
+		_mouseButtonFromEvent: function (event) {
+		    if (event.which) {
+		        switch (event.which) {
+		            case 2:
+		                return CRunApp.VK_MBUTTON;
+		                break;
+		            case 3:
+		                return CRunApp.VK_RBUTTON;
+		                break;
+		            default:
+		                return CRunApp.VK_LBUTTON;
+		                break;
+		        }
+		    } else {
+		        switch (event.button) {
+		            case 2:
+		                return CRunApp.VK_RBUTTON;
+		                break;
+		            case 4:
+		                return CRunApp.VK_MBUTTON;
+		                break;
+		            default:
+		                return CRunApp.VK_LBUTTON;
+		                break;
+		        }
+		    }
+		},
+		mouseUp: function (e)
 		{
-			var code;
-			if (e.which)
-			{
-				switch (e.which)
-				{
-					case 2:
-						code = CRunApp.VK_MBUTTON;
-						break;
-					case 3:
-						code = CRunApp.VK_RBUTTON;
-						break;
-					default:
-						code = CRunApp.VK_LBUTTON;
-						break;
-				}
-			}
-			else
-			{
-				switch (e.button)
-				{
-					case 2:
-						code = CRunApp.VK_RBUTTON;
-						break;
-					case 4:
-						code = CRunApp.VK_MBUTTON;
-						break;
-					default:
-						code = CRunApp.VK_LBUTTON;
-						break;
-				}
-			}
+			var code = this._mouseButtonFromEvent(e);
 			this.mouseMove(e, this.canvas, 0x12345678);
 			this.bMouseIn = true;
 			this.keyBuffer[code] = false;
@@ -17879,64 +17964,53 @@ window['Runtime'] = (function Runtime(__can, __path){
 				this.subApps[n].mouseUp(e);
 
 			if (!this.touchable)
-				this.touchEnd(new CFakeTouch(e.pageX, e.pageY, this.canvas));
+			    this.touchEnd(new CFakeTouch(e.pageX, e.pageY, this.canvas), false);
 		},
-		mouseDown:         function (e)
+		mouseDown: function (e, pointerEvent)
 		{
-			var code;
-			if (e.which)
-			{
-				switch (e.which)
-				{
-					case 2:
-						code = CRunApp.VK_MBUTTON;
-						break;
-					case 3:
-						code = CRunApp.VK_RBUTTON;
-						break;
-					default:
-						code = CRunApp.VK_LBUTTON;
-						break;
-				}
-			}
-			else
-			{
-				switch (e.button)
-				{
-					case 2:
-						code = CRunApp.VK_RBUTTON;
-						break;
-					case 4:
-						code = CRunApp.VK_MBUTTON;
-						break;
-					default:
-						code = CRunApp.VK_LBUTTON;
-						break;
-				}
-			}
-			this.mouseMove(e, this.canvas, 0x12345678);
+		    var code = this._mouseButtonFromEvent(e);
+		    this.mouseMove(e, this.canvas, 0x12345678);
 			this.bMouseIn = true;
 			this.keyNew = true;
 			this.keyBuffer[code] = true;
 
-	//		if (this.run != null && this.run.rhEvtProg != null)
-	//			this.run.rhEvtProg.onMouseButton(code - CRunApp.VK_LBUTTON, 1);
+		    // Enable sounds in Chrome
+			this.enableSoundsInChrome();
 
 		    //handle mouse button event
 			if (this.run != null && this.run.rhEvtProg != null) {
-			    //single or double click, we check the number of "clicks" in quick repetition check for odd/even
-			    //e.detail % 2 == 0 is double click!
-			    this.run.rhEvtProg.onMouseButton(code - CRunApp.VK_LBUTTON, e.detail % 2 == 0 ? 2 : 1);
+			    if (pointerEvent) {
+			        //single or double click?
+			        var now = Date.now();
+			        var nClicks = (this.mouseDoubleClickTimestamp !== null && this.mouseDoubleClickCode == code && now - this.mouseDoubleClickTimestamp <= CRunApp.MOUSE_DOUBLE_CLICK_DELAY) ? 2 : 1;
+			        this.mouseDoubleClickCode = code;
+			        this.mouseDoubleClickTimestamp = now;
+			        this.run.rhEvtProg.onMouseButton(code - CRunApp.VK_LBUTTON, nClicks);
+			    }
+			    else {
+
+			        if (this.browserDetect.isIE) {
+			            this.run.rhEvtProg.onMouseButton(code - CRunApp.VK_LBUTTON, 1);
+			        }
+			        else {
+			            //single or double click, we check the number of "clicks" in quick repetition check for odd/even
+			            //e.detail % 2 == 0 is double click!
+			            this.run.rhEvtProg.onMouseButton(code - CRunApp.VK_LBUTTON, e.detail % 2 == 0 ? 2 : 1);
+			        }
+			    }
 			}
 
 		    //pass to sub apps
 			var n;
 			for (n = 0; n < this.subApps.length; n++)
-				this.subApps[n].mouseDown(e);
+			    this.subApps[n].mouseDown(e, pointerEvent);
 
 		    //handle touches
 			if (!this.touchable)
-				this.touchStart(new CFakeTouch(e.pageX, e.pageY, this.canvas));
+			    this.touchStart(new CFakeTouch(e.pageX, e.pageY, this.canvas), false);
+
+		    // Build 289: give focus to window when user clicks
+			window.focus();
 		},
 		forceMouseButton:  function (bDown)
 		{
@@ -17955,30 +18029,33 @@ window['Runtime'] = (function Runtime(__can, __path){
 			for (n = 0; n < this.subApps.length; n++)
 				this.subApps[n].mouseOut(e);
 			if (!this.touchable)
-				this.touchEnd(new CFakeTouch(e.pageX, e.pageY, this.canvas));
+			    this.touchEnd(new CFakeTouch(e.pageX, e.pageY, this.canvas), false);
 		},
-	    /*
+	    // For IE only
 		click:             function (e)
 		{
-	//		if (this.run != null && this.run.rhEvtProg != null)
-	//			this.run.rhEvtProg.onMouseButton(0, 1);
+		    if (this.browserDetect.isIE) {
+		        //if (this.run != null && this.run.rhEvtProg != null)
+		        //  this.run.rhEvtProg.onMouseButton(0, 1);
 
-			// Handles clicks
-			var n;
-			for (n = 0; n < this.subApps.length; n++)
-				this.subApps[n].click(e);
-
+		        // Handles clicks
+		        var n;
+		        for (n = 0; n < this.subApps.length; n++)
+		            this.subApps[n].click(e);
+		    }
 		},
+	    // For IE only
 		dblClick:          function (e)
 		{
-			if (this.run != null && this.run.rhEvtProg != null)
-				this.run.rhEvtProg.onMouseButton(0, 2);
+		    if (this.browserDetect.isIE) {
+		        if (this.run != null && this.run.rhEvtProg != null)
+		            this.run.rhEvtProg.onMouseButton(0, 2);
 
-			var n;
-			for (n = 0; n < this.subApps.length; n++)
-				this.subApps[n].dblClick(e);
+		        var n;
+		        for (n = 0; n < this.subApps.length; n++)
+		            this.subApps[n].dblClick(e);
+		    }
 		},
-	    */
 		mouseWheel:        function (e)
 		{
 			this.bMouseIn = true;
@@ -17990,9 +18067,19 @@ window['Runtime'] = (function Runtime(__can, __path){
 				this.run.onMouseWheel(this.deltaWheel);
 		},
 
-		touchStart: function (event)
+	    // Enable sounds in Chrome
+		enableSoundsInChrome: function ()
 		{
-			// Enable sounds on iOS
+		    if (this.browserDetect.isChrome && this.soundContext != null && this.soundContext.state == 'suspended')
+		        this.soundContext.resume();
+		},
+
+		touchStart: function (event, pointerEvent)
+		{
+	        // Enable sounds in Chrome
+		    this.enableSoundsInChrome();
+
+		    // Enable sounds on iOS
 		    if (!this.iOS && this.silentSound)
 			{
 				this.silentSound.playIt();
@@ -18003,9 +18090,16 @@ window['Runtime'] = (function Runtime(__can, __path){
 				return;
 
 			var n, m;
-			for (n = 0; n < event.changedTouches.length; n++)
+			var nTouches = (pointerEvent) ? 1 : event.changedTouches.length;
+			for (n = 0; n < nTouches; n++)
 			{
-				var touch = event.changedTouches[n];
+			    var touch;
+			    if (pointerEvent) {
+			        touch = event;
+			        touch.identifier = event.pointerId;
+			    } else {
+			        touch = event.changedTouches[n];
+			    }
 
 				for (m = 0; m < CRunApp.MAX_TOUCHES; m++)
 				{
@@ -18040,7 +18134,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 									this.run.rhEvtProg.onMouseButton(0, 1);
 								var p;
 								for (p = 0; p < this.subApps.length; p++)
-									this.subApps[p].touchStart(event);
+								    this.subApps[p].touchStart(event, pointerEvent);
 							}
 						}
 						break;
@@ -18048,15 +18142,22 @@ window['Runtime'] = (function Runtime(__can, __path){
 				}
 			}
 		},
-		touchMove:  function (event)
+		touchMove: function (event, pointerEvent)
 		{
 			if (this.touchesID == null)
 				return;
 
 			var n, m, o;
-			for (n = 0; n < event.changedTouches.length; n++)
+			var nTouches = (pointerEvent) ? 1 : event.changedTouches.length;
+			for (n = 0; n < nTouches; n++)
 			{
-				var touch = event.changedTouches[n];
+			    var touch;
+			    if (pointerEvent) {
+			        touch = event;
+			        touch.identifier = event.pointerId;
+			    } else {
+			        touch = event.changedTouches[n];
+			    }
 
 				for (m = 0; m < CRunApp.MAX_TOUCHES; m++)
 				{
@@ -18081,14 +18182,14 @@ window['Runtime'] = (function Runtime(__can, __path){
 								this.run.rhEvtProg.onMouseMove();
 							var p;
 							for (p = 0; p < this.subApps.length; p++)
-								this.subApps[p].touchStart(event, null);
+							    this.subApps[p].touchMove(event, pointerEvent);
 						}
 						break;
 					}
 				}
 			}
 		},
-		touchEnd:   function (event)
+		touchEnd: function (event, pointerEvent)
 		{
 		    // Enable sounds on iOS
 		    if (this.iOS && this.silentSound) {
@@ -18100,9 +18201,16 @@ window['Runtime'] = (function Runtime(__can, __path){
 				return;
 
 			var n, m, o;
-			for (n = 0; n < event.changedTouches.length; n++)
+			var nTouches = (pointerEvent) ? 1 : event.changedTouches.length;
+			for (n = 0; n < nTouches; n++)
 			{
-				var touch = event.changedTouches[n];
+			    var touch;
+			    if (pointerEvent) {
+			        touch = event;
+			        touch.identifier = event.pointerId;
+			    } else {
+			        touch = event.changedTouches[n];
+			    }
 
 				for (m = 0; m < CRunApp.MAX_TOUCHES; m++)
 				{
@@ -18129,7 +18237,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 							this.keyBuffer[CRunApp.VK_LBUTTON] = false;
 							var p;
 							for (p = 0; p < this.subApps.length; p++)
-								this.subApps[p].touchEnd(event);
+							    this.subApps[p].touchEnd(event, pointerEvent);
 						}
 					}
 				}
@@ -18235,6 +18343,16 @@ window['Runtime'] = (function Runtime(__can, __path){
 				this.joystick.loadImages();
 				this.joystick.reset(flags);
 				this.joystickOn = 1;
+				if (this.frame != null && (this.frame.html5Options & CRunFrame.HTML5FOPT_JOYSTICK_DPAD) != 0)
+				{
+				    this.canvas.setAttribute("style", "-ms-touch-action: manipulation;");
+				    this.canvas.setAttribute("style", "touch-action: manipulation;");
+				}
+				else
+				{
+				    this.canvas.setAttribute("style", "-ms-touch-action: none;");
+				    this.canvas.setAttribute("style", "touch-action: none;");
+				}
 				if (this.touchCalls.indexOf(this.joystick) < 0)
 				{
 					this.touchCalls.add(this.joystick);
@@ -18260,36 +18378,78 @@ window['Runtime'] = (function Runtime(__can, __path){
 				this.endAccelerometer();
 			this.joystickOn = 0;
 		},
-		startAccelerometer: function ()
-		{
-			if (this.accelerometer == 0)
-			{
-				var that = this;
-				if (window.DeviceMotionEvent)
-				{
-					__scope.ondevicemotion = function (event)
-					{
-						that.accX = event.acceleration.y / 9.780318;
-						that.accY = event.acceleration.x / 9.780318;
-						that.accZ = event.acceleration.z / 9.780318;
-						that.accGravX = event.accelerationIncludingGravity.y / 9.780318;
-						that.accGravY = event.accelerationIncludingGravity.x / 9.780318;
-						that.accGravZ = event.accelerationIncludingGravity.z / 9.780318;
-					};
-				}
-			}
-			this.accelerometer++;
+		startAccelerometer: function () {
+		    if (this.accelerometer == 0) {
+		        var that = this;
+		        if (window.DeviceMotionEvent) {
+		            this.accelerometerHandler = this._handleOnDeviceMotion.bind(this);
+		            window.addEventListener("devicemotion", this.accelerometerHandler);
+		        }
+		    }
+		    this.accelerometer++;
 		},
-		endAccelerometer:   function ()
-		{
-			this.accelerometer--;
-			if (this.accelerometer <= 0)
-			{
-				__scope.ondevicemotion = null;
-				this.accelerometer = 0;
-			}
+		_handleOnDeviceMotion: function (event) {
+		    var ax = event.acceleration.x / 9.780318;
+		    var ay = event.acceleration.y / 9.780318;
+		    var az = event.acceleration.z / 9.780318;
+		    var agx = event.accelerationIncludingGravity.x / 9.780318;
+		    var agy = event.accelerationIncludingGravity.y / 9.780318;
+		    var agz = event.accelerationIncludingGravity.z / 9.780318;
+
+		    this.accX = ax;
+		    this.accY = ay;
+		    this.accZ = az;
+		    this.accGravX = agx;
+		    this.accGravY = agy;
+		    this.accGravZ = agz;
+
+		    // Adjust this to device rotation
+		    switch (window.orientation) {
+		        case 0:     // portrait
+		            this.accX = -ax;
+		            this.accY = ay;
+		            this.accGravX = -agx;
+		            this.accGravY = agy;
+		            break;
+		        case 90:     // landscape
+		            this.accX = ay;
+		            this.accY = ax;
+		            this.accGravX = agy;
+		            this.accGravY = agx;
+		            break;
+		        case 180:    // portrait flipped
+		            this.accX = ax;
+		            this.accY = -ay;
+		            this.accGravX = agx;
+		            this.accGravY = -agy;
+		            break;
+		        case -90:     // landscape flipped
+		            this.accX = -ay;
+		            this.accY = -ax;
+		            this.accGravX = -agy;
+		            this.accGravY = -agx;
+		            break;
+		    }
+
+		    if (this.iOS) {
+		        this.accX = -this.accX;
+		        this.accY = -this.accY;
+		        this.accGravX = -this.accGravX;
+		        this.accGravY = -this.accGravY;
+		    }
+
 		},
-		getJoystick:        function ()
+		endAccelerometer: function () {
+		    this.accelerometer--;
+		    if (this.accelerometer <= 0) {
+		        //__scope.ondevicemotion = null;
+		        if (window.DeviceMotionEvent) {
+		            window.removeEventListener("devicemotion", this.accelerometerHandler);
+		        }
+		        this.accelerometer = 0;
+		    }
+		},
+		getJoystick: function ()
 		{
 			var joystick = 0;
 			if (this.accGravX < -0.2)
@@ -18350,7 +18510,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 			else
 			{
 				preloader.touchMeQuit = true;
-				if (this.silentSound != null)
+				if (this.silentSound != null && (this.dwOptions & CRunApp.AH2OPT_LOADSOUNDSONTOUCH) != 0 )
 				{
 					preloader.touchMeFont = new CFont();
 					preloader.touchMeFont.createDefaultFont();
@@ -18398,10 +18558,11 @@ window['Runtime'] = (function Runtime(__can, __path){
 	CRunFrame.CM_OBSTACLE = 0x0001;
 	CRunFrame.CM_PLATFORM = 0x0002;
 	CRunFrame.HEIGHT_PLATFORM = 6;
-	CRunFrame.HTML5FOPT_DISPLAYPRELOADER = 0x0100;
 	CRunFrame.IPHONEOPT_JOYSTICK_FIRE1 = 0x0001;
 	CRunFrame.IPHONEOPT_JOYSTICK_FIRE2 = 0x0002;
 	CRunFrame.IPHONEOPT_JOYSTICK_LEFTHAND = 0x0004;
+	CRunFrame.HTML5FOPT_JOYSTICK_DPAD = 0x0008;
+	CRunFrame.HTML5FOPT_DISPLAYPRELOADER = 0x0100;
 	CRunFrame.JOYSTICK_NONE = 0x0000;
 	CRunFrame.JOYSTICK_TOUCH = 0x0001;
 	CRunFrame.JOYSTICK_ACCELEROMETER = 0x0002;
@@ -18578,8 +18739,8 @@ window['Runtime'] = (function Runtime(__can, __path){
 			{
 				this.app.fontBank.setAllToLoad();
 				this.app.soundBank.setAllToLoad();
-				if (this.app.mosaicMaxHandle == 0)
-					this.app.imageBank.setAllToLoad();
+				//if (this.app.mosaicMaxHandle == 0)
+				this.app.imageBank.setAllToLoad();
 			}
 			this.app.imageBank.load(this.app.file);
 			this.app.fontBank.load(this.app.file);
@@ -18984,7 +19145,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 			{
 				if (this.channels[c] != null)
 				{
-					this.channels[c].pause();
+					this.channels[c].globalpause();
 				}
 			}
 		},
@@ -19022,7 +19183,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 			{
 				if (this.channels[c] != null)
 				{
-					this.channels[c].resume();
+				    this.channels[c].globalresume();
 				}
 			}
 		},
@@ -19519,6 +19680,7 @@ window['Runtime'] = (function Runtime(__can, __path){
 		this.isLoaded = false;
 		this.appSprite = new Sprite();
 		this.subApp = new CRunApp(this.app, this.app.file, this.app.path, true);
+		this.subApp.isPreloaderSubApp = true;
 		this.subApp.setParentApp(this.app, this.app.preloaderFrameNumber, 0, this.appSprite, this.app.gaCxWin, this.app.gaCyWin);
 		this.subApp.digest();
 		this.subApp.loadPreloader = false;
@@ -19623,16 +19785,24 @@ window['Runtime'] = (function Runtime(__can, __path){
 	CJoystick.JFLAG_FIRE1 = 0x0002;
 	CJoystick.JFLAG_FIRE2 = 0x0004;
 	CJoystick.JFLAG_LEFTHANDED = 0x0008;
+	CJoystick.JFLAG_DPAD = 0x0010;
 	CJoystick.JPOS_NOTDEFINED = 0x80000000;
 	CJoystick.JOY_ANGLEGAP = 70;
-	CJoystick.DPAD_ANGLEGAP = 60;
-	CJoystick.DEADZONE = 0.5;
+	CJoystick.DEADZONE = 0.25;
 
 	function CJoystick(a)
 	{
 		this.app = a;
 		this.joyBack = null;
 		this.joyFront = null;
+		this.joyUp = null;
+		this.joyUpD = null;
+		this.joyDown = null;
+		this.joyDownD = null;
+		this.joyLeft = null;
+		this.joyLeftD = null;
+		this.joyRight = null;
+		this.joyRightD = null;
 		this.fire1U = null;
 		this.fire2U = null;
 		this.fire1D = null;
@@ -19645,7 +19815,6 @@ window['Runtime'] = (function Runtime(__can, __path){
 		this.flags = 0;
 		this.touches = new Array(3);
 		this.bSetPositions = false;
-		this.isJoystick = true;
 		this.joydeadzone = 0;
 		this.joyanglezone = 0;
 		this.joyradsize = 0;
@@ -19654,10 +19823,24 @@ window['Runtime'] = (function Runtime(__can, __path){
 	{
 		loadImages:   function ()
 		{
-			if (this.joyBack == null)
-			{
-				this.joyBack = CImage.createFromFile(this.app, "joyback.png");
-				this.joyFront = CImage.createFromFile(this.app, "joyfront.png");
+		    if (this.joyBack == null)
+		    {
+		        this.joyBack = CImage.createFromFile(this.app, "joyback.png");
+		        this.joyFront = CImage.createFromFile(this.app, "joyfront.png");
+		    }
+		    if (this.joyUp == null && (this.app.frame.html5Options & CRunFrame.HTML5FOPT_JOYSTICK_DPAD) != 0)     // need to test the frame option, as this.flags may not be initialized yet
+	        {
+		        this.joyUp = CImage.createFromFile(this.app, "joyup.png");
+		        this.joyUpD = CImage.createFromFile(this.app, "joyupd.png");
+		        this.joyDown = CImage.createFromFile(this.app, "joydown.png");
+		        this.joyDownD = CImage.createFromFile(this.app, "joydownd.png");
+		        this.joyLeft = CImage.createFromFile(this.app, "joyleft.png");
+		        this.joyLeftD = CImage.createFromFile(this.app, "joyleftd.png");
+		        this.joyRight = CImage.createFromFile(this.app, "joyright.png");
+		        this.joyRightD = CImage.createFromFile(this.app, "joyrightd.png");
+		    }
+		    if (this.fire1U == null)
+	        {
 				this.fire1U = CImage.createFromFile(this.app, "fire1U.png");
 				this.fire2U = CImage.createFromFile(this.app, "fire2U.png");
 				this.fire1D = CImage.createFromFile(this.app, "fire1D.png");
@@ -19667,27 +19850,44 @@ window['Runtime'] = (function Runtime(__can, __path){
 		reset:        function (f)
 		{
 			this.flags = f;
+
 			if (this.joyBack != null && this.joyBack.width != 0)
 				this.setPositions();
 			else
 				this.bSetPositions = true;
 
-			if (this.isJoystick)
-				this.joyanglezone = CJoystick.JOY_ANGLEGAP * Math.PI / 180;
-			else
-				this.joyanglezone = CJoystick.DPAD_ANGLEGAP * Math.PI / 180;
+			this.joyanglezone = CJoystick.JOY_ANGLEGAP * Math.PI / 180;
 		},
 		setPositions: function ()
 		{
 			var sx, sy;
 			sx = this.app.gaCxWin;
 			sy = this.app.gaCyWin;
+
+			if ((this.flags & CJoystick.JFLAG_DPAD) != 0)
+			{
+			    this.joyradsize = Math.ceil(Math.sqrt(this.joyLeft.width * this.joyLeft.width + this.joyUp.height * this.joyUp.height));
+			}
+			else
+			{
+			    this.joyradsize = Math.ceil(Math.sqrt(this.joyBack.width / 2 * this.joyBack.width / 2 + this.joyBack.height / 2 * this.joyBack.height / 2));
+			}
+			this.joydeadzone = CJoystick.DEADZONE * this.joyradsize;
+
 			if ((this.flags & CJoystick.JFLAG_LEFTHANDED) == 0)
 			{
 				if ((this.flags & CJoystick.JFLAG_JOYSTICK) != 0)
 				{
-					this.imagesX[CJoystick.KEY_JOYSTICK] = 16 + this.joyBack.width / 2;
-					this.imagesY[CJoystick.KEY_JOYSTICK] = sy - 16 - this.joyBack.height / 2;
+				    if ((this.flags & CJoystick.JFLAG_DPAD) != 0)
+				    {
+				        this.imagesX[CJoystick.KEY_JOYSTICK] = 16 + this.joyLeft.width;
+				        this.imagesY[CJoystick.KEY_JOYSTICK] = sy - 16 - this.joyDown.height;
+	                }
+				    else
+				    {
+				        this.imagesX[CJoystick.KEY_JOYSTICK] = 16 + this.joyBack.width / 2;
+				        this.imagesY[CJoystick.KEY_JOYSTICK] = sy - 16 - this.joyBack.height / 2;
+				    }
 				}
 				if ((this.flags & CJoystick.JFLAG_FIRE1) != 0 && (this.flags & CJoystick.JFLAG_FIRE2) != 0)
 				{
@@ -19711,9 +19911,17 @@ window['Runtime'] = (function Runtime(__can, __path){
 			{
 				if ((this.flags & CJoystick.JFLAG_JOYSTICK) != 0)
 				{
-					this.imagesX[CJoystick.KEY_JOYSTICK] = sx - 16 - this.joyBack.width / 2;
-					this.imagesY[CJoystick.KEY_JOYSTICK] = sy - 16 - this.joyBack.height / 2;
-				}
+				    if ((this.flags & CJoystick.JFLAG_DPAD) != 0)
+				    {
+					    this.imagesX[CJoystick.KEY_JOYSTICK] = sx - 16 - this.joyLeft.width;
+					    this.imagesY[CJoystick.KEY_JOYSTICK] = sy - 16 - this.joyDown.height;
+	                }
+				    else
+				    {
+					    this.imagesX[CJoystick.KEY_JOYSTICK] = sx - 16 - this.joyBack.width / 2;
+					    this.imagesY[CJoystick.KEY_JOYSTICK] = sy - 16 - this.joyBack.height / 2;
+					}
+	            }
 				if ((this.flags & CJoystick.JFLAG_FIRE1) != 0 && (this.flags & CJoystick.JFLAG_FIRE2) != 0)
 				{
 					this.imagesX[CJoystick.KEY_FIRE1] = this.fire1U.width / 2 + 16 + this.fire2U.width * 2 / 3;
@@ -19774,12 +19982,38 @@ window['Runtime'] = (function Runtime(__can, __path){
 			var x, y, width, height;
 			if ((this.flags & CJoystick.JFLAG_JOYSTICK) != 0)
 			{
-				x = this.imagesX[CJoystick.KEY_JOYSTICK] - this.joyBack.width / 2;
-				y = this.imagesY[CJoystick.KEY_JOYSTICK] - this.joyBack.height / 2;
-				context.renderImage(this.joyBack, x, y, 0, 1, 1, 0, 0);
-				x = this.imagesX[CJoystick.KEY_JOYSTICK] + this.joystickX - this.joyFront.width / 2;
-				y = this.imagesY[CJoystick.KEY_JOYSTICK] + this.joystickY - this.joyFront.height / 2;
-				context.renderImage(this.joyFront, x, y, 0, 1, 1, 0, 0);
+			    if ((this.flags & CJoystick.JFLAG_DPAD) != 0)
+			    {
+			        var img = (this.joystick & 1) ? this.joyUpD : this.joyUp;
+			        x = this.imagesX[CJoystick.KEY_JOYSTICK] - img.width / 2;
+			        y = this.imagesY[CJoystick.KEY_JOYSTICK] - img.height;
+			        context.renderImage(img, x, y, 0, 1, 1, 0, 0);
+
+
+			        img = (this.joystick & 2) ? this.joyDownD : this.joyDown;
+			        x = this.imagesX[CJoystick.KEY_JOYSTICK] - img.width / 2;
+			        y = this.imagesY[CJoystick.KEY_JOYSTICK];
+			        context.renderImage(img, x, y, 0, 1, 1, 0, 0);
+
+			        img = (this.joystick & 4) ? this.joyLeftD : this.joyLeft;
+			        x = this.imagesX[CJoystick.KEY_JOYSTICK] - img.width;
+			        y = this.imagesY[CJoystick.KEY_JOYSTICK] - img.height / 2;
+			        context.renderImage(img, x, y, 0, 1, 1, 0, 0);
+
+			        img = (this.joystick & 8) ? this.joyRightD : this.joyRight;
+			        x = this.imagesX[CJoystick.KEY_JOYSTICK];
+			        y = this.imagesY[CJoystick.KEY_JOYSTICK] - img.height / 2;
+			        context.renderImage(img, x, y, 0, 1, 1, 0, 0);
+	            }
+			    else
+			    {
+			        x = this.imagesX[CJoystick.KEY_JOYSTICK] - this.joyBack.width / 2;
+			        y = this.imagesY[CJoystick.KEY_JOYSTICK] - this.joyBack.height / 2;
+			        context.renderImage(this.joyBack, x, y, 0, 1, 1, 0, 0);
+			        x = this.imagesX[CJoystick.KEY_JOYSTICK] + this.joystickX - this.joyFront.width / 2;
+			        y = this.imagesY[CJoystick.KEY_JOYSTICK] + this.joystickY - this.joyFront.height / 2;
+			        context.renderImage(this.joyFront, x, y, 0, 1, 1, 0, 0);
+			    }
 			}
 			if ((this.flags & CJoystick.JFLAG_FIRE1) != 0)
 			{
@@ -19797,15 +20031,109 @@ window['Runtime'] = (function Runtime(__can, __path){
 			}
 		},
 
+		updateJoystickState:         function (x, y)
+	    {
+		    this.joystickX = x - this.imagesX[CJoystick.KEY_JOYSTICK];
+		    this.joystickY = y - this.imagesY[CJoystick.KEY_JOYSTICK];
+
+		    if ((this.flags & CJoystick.JFLAG_DPAD) == 0)
+	        {
+		        if (this.joystickX<-this.joyBack.width/4)
+	            {
+		            this.joystickX=-this.joyBack.width/4;
+	            }
+		        if (this.joystickX>this.joyBack.width/4)
+	            {
+		            this.joystickX=this.joyBack.width/4;
+	            }
+		        if (this.joystickY<-this.joyBack.height/4)
+	            {
+		            this.joystickY=-this.joyBack.height/4;
+	            }
+		        if (this.joystickY>this.joyBack.height/4)
+	            {
+		            this.joystickY=this.joyBack.height/4;
+	            }
+	        }
+
+		    var angle = (Math.PI * 2 - Math.atan2(this.joystickY, this.joystickX)) % (Math.PI * 2);
+		    this.joystick &= 0xF0;
+		    var h = Math.sqrt(this.joystickX * this.joystickX + this.joystickY * this.joystickY);
+
+		    // Is the radius vector above the deadzone and border of the joystick base
+		    if (h > this.joydeadzone && h <= this.joyradsize)
+		    {
+		        this.joystickX = Math.cos(angle) * this.joyradsize/2;
+		        this.joystickY = Math.sin(angle) * -this.joyradsize/2;
+
+		        var j = 0;
+
+		        // Checking in 45 degrees zone equal (PI/4); 1/4, 2/4, 3/4, 4/4, 5/4, 6/4, 7/4, 8/4
+		        // organized like 8/4, 2/4, 4/4, 6/4,  priority for right, up, left and down
+		        if (angle >= 0.0)
+		        {
+		            while (true)
+		            {
+		                // Right
+		                if (this.insideZone(angle, 0, this.joyanglezone) || this.insideZone(angle, (Math.PI) * 2, this.joyanglezone))
+		                {
+		                    j = 8;
+		                    break;
+		                }
+		                // Up
+		                if (this.insideZone(angle, Math.PI / 2, this.joyanglezone))
+		                {
+		                    j = 1;
+		                    break;
+		                }
+		                // Left
+		                if (this.insideZone(angle, (Math.PI), this.joyanglezone))
+		                {
+		                    j = 4;
+		                    break;
+		                }
+		                // Down
+		                if (this.insideZone(angle, (Math.PI / 4) * 6, this.joyanglezone))
+		                {
+		                    j = 2;
+		                    break;
+		                }
+		                // Right/Up
+		                if (this.insideZone(angle, Math.PI / 4, Math.PI / 2 - this.joyanglezone))
+		                {
+		                    j = 9;
+		                    break;
+		                }
+		                // Left/Up
+		                if (this.insideZone(angle, (Math.PI / 4) * 3, Math.PI / 2 - this.joyanglezone))
+		                {
+		                    j = 5;
+		                    break;
+		                }
+		                // Left/Down
+		                if (this.insideZone(angle, (Math.PI / 4) * 5, Math.PI / 2 - this.joyanglezone))
+		                {
+		                    j = 6;
+		                    break;
+		                }
+		                // Right/Down
+		                if (this.insideZone(angle, (Math.PI / 4) * 7, Math.PI / 2 - this.joyanglezone))
+		                {
+		                    j = 10;
+		                    break;
+		                }
+		                break;
+		            }
+		        }
+		        this.joystick |= j;
+		    }
+	    },
+
 		touchStarted: function (touch)
 		{
 			var bFlag = false;
 			var x = this.app.getTouchX(touch);
 			var y = this.app.getTouchY(touch);
-
-			this.joydeadzone = CJoystick.DEADZONE * Math.ceil(Math.sqrt(this.joyBack.width / 2 * this.joyBack.width / 2 + this.joyBack.height / 2 * this.joyBack.height / 2));	//Radius Size percentage
-			// Max circle radius for the joystick or d-pad
-			this.joyradsize = Math.ceil(Math.sqrt(this.joyBack.width / 4 * this.joyBack.width / 4 + this.joyBack.height / 4 * this.joyBack.height / 4));
 
 			var key = this.getKey(x, y);
 			if (key != CJoystick.KEY_NONE)
@@ -19815,7 +20143,12 @@ window['Runtime'] = (function Runtime(__can, __path){
 				{
 					this.joystick &= 0xF0;
 					bFlag = true;
-				}
+	            
+					if ((this.flags & CJoystick.JFLAG_DPAD) != 0)
+					{
+					    this.updateJoystickState(x, y);
+					}
+	            }
 				if (key == CJoystick.KEY_FIRE1)
 				{
 					this.joystick |= 0x10;
@@ -19834,108 +20167,19 @@ window['Runtime'] = (function Runtime(__can, __path){
 		{
 			var x = this.app.getTouchX(touch);
 			var y = this.app.getTouchY(touch);
+
 			var key = this.getKey(x, y);
-			if (key == CJoystick.KEY_JOYSTICK && touch.identifier == this.touches[CJoystick.KEY_JOYSTICK])
+			if (key == CJoystick.KEY_JOYSTICK)
 			{
-				this.joystickX = x - this.imagesX[CJoystick.KEY_JOYSTICK];
-				this.joystickY = y - this.imagesY[CJoystick.KEY_JOYSTICK];
-
-				// angles ranges from 0 to 360 degrees in radians
-				var angle = (Math.PI * 2 - Math.atan2(this.joystickY, this.joystickX)) % (Math.PI * 2);
-				this.joystick &= 0xF0;
-				var h = Math.sqrt(this.joystickX * this.joystickX + this.joystickY * this.joystickY);
-
-				if (this.isJoystick)
-				{
-					this.joystickX = Math.cos(angle) * this.joyradsize;
-					this.joystickY = Math.sin(angle) * -this.joyradsize;
-				}
-				else
-				{
-					if (this.joystickX < -this.joyradsize)
-					{
-						this.joystickX = -this.joyradsize;
-					}
-					if (this.joystickX > this.joyradsize)
-					{
-						this.joystickX = this.joyradsize;
-					}
-					if (this.joystickY < -this.joyradsize)
-					{
-						this.joystickY = -this.joyradsize;
-					}
-					if (this.joystickY > this.joyradsize)
-					{
-						this.joystickY = this.joyradsize;
-					}
-				}
-
-				// Is the radius vector above the deadzone and border of the joystick base
-				if (h > this.joydeadzone && h < this.joyradsize * 3)
-				{
-
-					var j = 0;
-					// Checking in 45 degrees zone equal (PI/4); 1/4, 2/4, 3/4, 4/4, 5/4, 6/4, 7/4, 8/4
-					// organized like 8/4, 2/4, 4/4, 6/4,  priority for right, up, left and down
-					if (angle >= 0.0)
-					{
-						while (true)
-						{
-							// Right
-							if (this.insideZone(angle, 0, this.joyanglezone) || this.insideZone(angle, (Math.PI) * 2, this.joyanglezone))
-							{
-								j = 8;
-								break;
-							}
-							// Up
-							if (this.insideZone(angle, Math.PI / 2, this.joyanglezone))
-							{
-								j = 1;
-								break;
-							}
-							// Left
-							if (this.insideZone(angle, (Math.PI), this.joyanglezone))
-							{
-								j = 4;
-								break;
-							}
-							// Down
-							if (this.insideZone(angle, (Math.PI / 4) * 6, this.joyanglezone))
-							{
-								j = 2;
-								break;
-							}
-							// Right/Up
-							if (this.insideZone(angle, Math.PI / 4, Math.PI / 2 - this.joyanglezone))
-							{
-								j = 9;
-								break;
-							}
-							// Left/Up
-							if (this.insideZone(angle, (Math.PI / 4) * 3, Math.PI / 2 - this.joyanglezone))
-							{
-								j = 5;
-								break;
-							}
-							// Left/Down
-							if (this.insideZone(angle, (Math.PI / 4) * 5, Math.PI / 2 - this.joyanglezone))
-							{
-								j = 6;
-								break;
-							}
-							// Right/Down
-							if (this.insideZone(angle, (Math.PI / 4) * 7, Math.PI / 2 - this.joyanglezone))
-							{
-								j = 10;
-								break;
-							}
-							break;
-						}
-					}
-					this.joystick |= j;
-				}
+			    this.touches[CJoystick.KEY_JOYSTICK] = touch.identifier;
+			}
+		    //if (key == CJoystick.KEY_JOYSTICK && touch.identifier == this.touches[CJoystick.KEY_JOYSTICK])
+			if ( this.touches[CJoystick.KEY_JOYSTICK] == touch.identifier )
+			{
+			    this.updateJoystickState(x, y);
 			}
 		},
+
 		insideZone: function (angle, angle_ref, gap)
 		{
 			// check if the angle is in the range, could be ported using degrees instead.
@@ -19972,13 +20216,26 @@ window['Runtime'] = (function Runtime(__can, __path){
 		{
 			if ((this.flags & CJoystick.JFLAG_JOYSTICK) != 0)
 			{
-				if (x >= this.imagesX[CJoystick.KEY_JOYSTICK] - this.joyBack.width / 2 && x < this.imagesX[CJoystick.KEY_JOYSTICK] + this.joyBack.width / 2)
-				{
-					if (y > this.imagesY[CJoystick.KEY_JOYSTICK] - this.joyBack.height / 2 && y < this.imagesY[CJoystick.KEY_JOYSTICK] + this.joyBack.height / 2)
-					{
-						return CJoystick.KEY_JOYSTICK;
-					}
-				}
+			    if ((this.flags & CJoystick.JFLAG_DPAD) != 0)
+			    {
+			        if (x >= this.imagesX[CJoystick.KEY_JOYSTICK] - this.joyLeft.width && x < this.imagesX[CJoystick.KEY_JOYSTICK] + this.joyRight.width)
+			        {
+			            if (y > this.imagesY[CJoystick.KEY_JOYSTICK] - this.joyUp.height && y < this.imagesY[CJoystick.KEY_JOYSTICK] + this.joyDown.height)
+			            {
+			                return CJoystick.KEY_JOYSTICK;
+			            }
+			        }
+			    }
+			    else
+			    {
+			        if (x >= this.imagesX[CJoystick.KEY_JOYSTICK] - this.joyBack.width / 2 && x < this.imagesX[CJoystick.KEY_JOYSTICK] + this.joyBack.width / 2)
+			        {
+			            if (y > this.imagesY[CJoystick.KEY_JOYSTICK] - this.joyBack.height / 2 && y < this.imagesY[CJoystick.KEY_JOYSTICK] + this.joyBack.height / 2)
+			            {
+			                return CJoystick.KEY_JOYSTICK;
+			            }
+			        }
+			    }
 			}
 			if ((this.flags & CJoystick.JFLAG_FIRE1) != 0)
 			{
@@ -37106,10 +37363,6 @@ window['Runtime'] = (function Runtime(__can, __path){
 		{
 		},
 
-		renderTriangle: function (x, y, b, h, color, orientation)		// x, y is the triangle's left-bottom/top vertice, base and height are reference from this point also.
-		{
-		},
-		
 		pushClip: function (x, y, w, h)
 		{
 			var curClip = this.clips[this.clips.length - 1];
@@ -37225,7 +37478,16 @@ window['Runtime'] = (function Runtime(__can, __path){
 				this.setInkEffect(inkEffect, inkEffectParam);
 
 				context.fillStyle = CServices.getColorString(color);
-				context.fillRect(x, y, w, h);
+
+				var deltax = x - Math.floor(x);
+				var deltay = y - Math.floor(y);
+				if (deltax != 0)
+				    deltax = (1 - deltax);
+				if (deltay != 0)
+				    deltay = (1 - deltay);
+				deltax += this.dxw;
+				deltay += this.dyw;
+			    context.fillRect(x, y, w + deltax, h + deltay);
 			},
 
 			renderSolidColorEllipse: function (x, y, w, h, color, inkEffect, inkEffectParam)
@@ -37249,9 +37511,16 @@ window['Runtime'] = (function Runtime(__can, __path){
 
 				this.setInkEffect(inkEffect, inkEffectParam);
 
-				this.configureGradient(x, y, w, h, vertical, color1, color2);
-
-				context.fillRect(x, y, w, h);
+				var deltax = x - Math.floor(x);
+				var deltay = y - Math.floor(y);
+				if (deltax != 0)
+				    deltax = (1 - deltax);
+				if (deltay != 0)
+				    deltay = (1 - deltay);
+				deltax += this.dxw;
+				deltay += this.dyw;
+				this.configureGradient(x, y, w + deltax, h + deltay, vertical, color1, color2);
+				context.fillRect(x, y, w + deltax, h + deltay);
 			},
 
 			renderGradientEllipse: function (x, y, w, h, color1, color2, vertical, inkEffect, inkEffectParam)
@@ -37281,131 +37550,74 @@ window['Runtime'] = (function Runtime(__can, __path){
 
 				this.setInkEffect(inkEffect, inkEffectParam);
 
-				if (angle == 0 && scaleX == 1 && scaleY == 1)
-				{
-					if (image.mosaic == 0)
-					{
-						if (image.img != null)
-						{
-						    context.drawImage(image.img, xi, yi);
-	                    }
-					}
-					else
-					{
-					    context.drawImage(image.app.imageBank.mosaics[image.mosaic],
-							image.mosaicX, image.mosaicY,
-							image.width, image.height,
-	                        xi, yi,
-							image.width, image.height);
-	                }
+				var deltax = x - Math.floor(x);
+				var deltay = y - Math.floor(y);
+				if (deltax != 0)
+				    deltax = (1 - deltax);
+				if (deltay != 0)
+				    deltay = (1 - deltay);
+				deltax += this.dxw;
+				deltay += this.dyw;
+				var imgX = 0;
+				var imgY = 0;
+				var img = null;
+				if (image.mosaic == 0) {
+				    img = image.img;
 				}
-				else
-				{
-					context.save();
-
-					context.translate(x, y);
-
-					if (angle != 0)
-						context.rotate(-angle * 0.0174532925);
-
-					context.scale(Math.max(0.001, scaleX), Math.max(0.001, scaleY));
-					context.translate(-image.xSpot, -image.ySpot);
-
-					if (image.mosaic == 0)
-					{
-					    if (image.img != null && image.width != 0 && image.height != 0)
-						{
-							context.drawImage(image.img, 0, 0, image.width, image.height,
-								0, 0, image.width, image.height);
-						}
-					}
-					else
-					{
-						context.drawImage(image.app.imageBank.mosaics[image.mosaic],
-							image.mosaicX, image.mosaicY,
-							image.width, image.height, 0, 0,
-							image.width, image.height);
-					}
-
-					context.restore();
+				else {
+				    img = image.app.imageBank.mosaics[image.mosaic];
+				    imgX = image.mosaicX;
+				    imgY = image.mosaicY;
 				}
-			},
-
-		    // This function is used by backdrop objects only, to avoid seams between objects
-	        // Limited to backdrop objects as it can affect rendering of small objects
-			renderImageWithSubPixelCorrection: function (image, x, y, angle, scaleX, scaleY, inkEffect, inkEffectParam) {
-			    //        if(! (image instanceof CImage))
-			    //            throw new Error("renderImage: bad image type: " + (typeof image));
-			    var context = this._context;
-			    var xi = x - image.xSpot;
-			    var yi = y - image.ySpot;
-			    //        if (xi+image.width<0 || xi>context.width || yi+image.height<0 || yi>context.height)
-			    //        	return;
-
-			    this.setInkEffect(inkEffect, inkEffectParam);
-
-			    if (angle == 0 && scaleX == 1 && scaleY == 1)
-			    {
-			        if (image.mosaic == 0)
-			        {
-			            if (image.img != null)
-			            {
-			                context.drawImage(image.img,
-	                            0, 0,
-	                            image.width, image.height,
+				if (img != null)
+				{
+				    if (angle == 0 && scaleX == 1 && scaleY == 1)
+				    {
+				        if (image.mosaic == 0 && deltax == 0 && deltay == 0)
+				        {
+			                context.drawImage(img, xi, yi);
+				        }
+				        else
+				        {
+				            context.drawImage(img,
+								imgX, imgY,
+								image.width, image.height,
 	                            xi, yi,
-	                            image.width + this.dxw, image.height + this.dyw);
-			            }
-			        }
-			        else
-			        {
-			            context.drawImage(image.app.imageBank.mosaics[image.mosaic],
-							image.mosaicX, image.mosaicY,
-							image.width, image.height,
-	                        xi, yi,
-							image.width + this.dxw, image.height + this.dyw);
-			        }
-			    }
-			    else
-			    {
-			        context.save();
+								image.width + deltax, image.height + deltay);
+				        }
+				    }
+				    else
+				    {
+				        context.save();
 
-			        context.translate(x, y);
+				        context.translate(x, y);
 
-			        if (angle != 0)
-			            context.rotate(-angle * 0.0174532925);
+				        if (angle != 0)
+				            context.rotate(-angle * 0.0174532925);
 
-			        context.scale(Math.max(0.001, scaleX), Math.max(0.001, scaleY));
-			        context.translate(-image.xSpot, -image.ySpot);
+				        context.scale(Math.max(0.001, scaleX), Math.max(0.001, scaleY));
+				        context.translate(-image.xSpot, -image.ySpot);
 
-			        if (image.mosaic == 0)
-			        {
-			            if (image.img != null)
-			            {
-			                context.drawImage(image.img, 0, 0, image.width, image.height,
-								0, 0, image.width, image.height);
-			            }
-			        }
-			        else
-			        {
-			            context.drawImage(image.app.imageBank.mosaics[image.mosaic],
-							image.mosaicX, image.mosaicY,
-							image.width, image.height, 0, 0,
-							image.width, image.height);
-			        }
+				        context.drawImage(img, imgX, imgY, image.width, image.height,
+	                        0, 0, image.width, image.height);
 
-			        context.restore();
-			    }
+				        context.restore();
+				    }
+				}
 			},
 
 			renderSimpleImage: function (image, x, y, width, height, inkEffect, inkEffectParam)
 			{
 				this.setInkEffect(inkEffect, inkEffectParam);
-				this._context.drawImage(image, x, y, width, height);
-
-			    // Not sure if we should add sub-pixel margin to this routine as it's not used by backdrops
-	            // Do it later if necessary only
-				//this._context.drawImage(image, x, y, width + this.dxw, height + this.dyw);
+				var deltax = x - Math.floor(x);
+				var deltay = y - Math.floor(y);
+				if (deltax != 0)
+				    deltax = (1 - deltax);
+				if (deltay != 0)
+				    deltay = (1 - deltay);
+				deltax += this.dxw;
+				deltay += this.dyw;
+			    this._context.drawImage(image, x, y, width + deltax, height + deltay);
 			},
 
 			renderPattern: function (image, x, y, w, h, inkEffect, inkEffectParam)
@@ -37428,32 +37640,35 @@ window['Runtime'] = (function Runtime(__can, __path){
 				var widthX = Math.floor(w / iSx) + 1;
 				var heightY = Math.floor(h / iSy) + 1;
 				var nX, nY;
-				for (nX = 0; nX < widthX; nX++)
-				{
-					for (nY = 0; nY < heightY; nY++)
-					{
-						if (image.mosaic == 0)
-						{
-							if (image.img != null)
-							{
-	//							context.drawImage(image.img, x + nX * iSx, y + nY * iSy);
-
-							    context.drawImage(image.img,
-	                                0, 0,
-	                                image.width, image.height,
-	                                x + nX * iSx, y + nY * iSy,
-	                                image.width + this.dxw, image.height + this.dyw);
-							}
-						}
-						else
-						{
-						    context.drawImage(image.app.imageBank.mosaics[image.mosaic],
-								image.mosaicX, image.mosaicY,
+				var deltax = x - Math.floor(x);
+				var deltay = y - Math.floor(y);
+				if (deltax != 0)
+				    deltax = (1 - deltax);
+				if (deltay != 0)
+				    deltay = (1 - deltay);
+				deltax += this.dxw;
+				deltay += this.dyw;
+				var imgX = 0;
+				var imgY = 0;
+				var img = null;
+				if (image.mosaic == 0) {
+				    img = image.img;
+				}
+				else {
+				    img = image.app.imageBank.mosaics[image.mosaic];
+				    imgX = image.mosaicX;
+				    imgY = image.mosaicY;
+				}
+				if (img != null) {
+				    for (nX = 0; nX < widthX; nX++) {
+				        for (nY = 0; nY < heightY; nY++) {
+				            context.drawImage(img,
+								imgX, imgY,
 								image.width, image.height,
 	                            x + nX * iSx, y + nY * iSy,
-								image.width + this.dxw, image.height + this.dyw);
-	                    }
-					}
+								image.width + deltax, image.height + deltay);
+				        }
+				    }
 				}
 				context.restore();
 			},
@@ -37511,40 +37726,6 @@ window['Runtime'] = (function Runtime(__can, __path){
 				context.stroke();
 			},
 
-			renderTriangle: 	function(x, y, b, h, color, orientation)
-			{
-				var context = this._context;
-				var l_color = CServices.getColorString(color);
-				
-				if(orientation == 1)	//Vertical
-				{
-					context.beginPath();			
-					context.moveTo(x,y);
-					context.lineTo(x+b,y);
-					context.lineTo(x+b/2,y-h);
-					context.closePath();
-					context.lineWidth = 1;
-					context.strokeStyle = l_color;
-					context.stroke();
-					context.fillStyle = l_color;
-					context.fill();
-
-				}
-				else 
-				{
-					context.beginPath();			
-					context.moveTo(x,y);
-					context.lineTo(x,y-b);
-					context.lineTo(x-h,y-b/2);
-					context.closePath();		
-					context.lineWidth = 1;
-					context.strokeStyle = l_color;
-					context.stroke();
-					context.fillStyle = l_color;
-					context.fill();
-				}
-			},
-			
 			renderRect: function (x, y, w, h, color, thickness, inkEffect, inkEffectParam)
 			{
 				var context = this._context;

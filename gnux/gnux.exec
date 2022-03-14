@@ -1,0 +1,15 @@
+**(This is a modified version of the Gnux framework)
+[START
+
+[int $$ 03F4
+[put $$ E4F8
+[pull $$ $$x*2/5
+[put $EF02,0x01
+[put $EF03,0x01
+[put $EF04,0x01
+[put $EF05,0x01
+[put $EF06,0x00
+[put $EF07,0xEE
+[cput "sc<3;0922;loc3213;binEEE28749274FFEE;ff<2<4-x8-xf4-xf9-<3-y8"
+
+END]

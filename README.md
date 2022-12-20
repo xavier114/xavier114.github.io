@@ -40,10 +40,5 @@ Also Some Apps And User data are saved in our servers.
 Unixel is a proprietary operating system
 based on Gnux Operating System made by me.
 
-Emulators links: N/A
-Unixel Web: xavier114.github.io
-Gnux links: N/A
-
 Unixel™
-
 Unex Computer Inc (c)
